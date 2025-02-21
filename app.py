@@ -26,18 +26,20 @@ nifty50_stocks = [
 # Create stock selector
 selected_stock = st.selectbox("Select Stock", nifty50_stocks)
 
-# Date range selector
-end_date = datetime.today().strftime('%Y-%m-%d')
-start_date = (datetime.today() - timedelta(days=365)).strftime('%Y-%m-%d')
-date_range = st.slider("Date Range", 
-                      min_value=start_date, 
-                      max_value=end_date, 
-                      value=[start_date, end_date])
+# Date range selector - Using separate date inputs instead of slider
+st.subheader("Date Range")
+col1, col2 = st.columns(2)
+start_date = col1.date_input("Start Date", value=pd.to_datetime("2023-01-01"))
+end_date = col2.date_input("End Date", value=pd.to_datetime("2023-12-31"))
+
+# Convert dates to strings for yfinance
+start_date_str = start_date.strftime('%Y-%m-%d')
+end_date_str = end_date.strftime('%Y-%m-%d')
 
 # Fetch data
 try:
     stock_data = yf.Ticker(selected_stock)
-    hist = stock_data.history(start=date_range[0], end=date_range[1])
+    hist = stock_data.history(start=start_date_str, end=end_date_str)
     
     # Display basic information
     st.subheader(f"Basic Information - {selected_stock}")
