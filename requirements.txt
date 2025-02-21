@@ -1,6 +1,7 @@
- streamlit
-yfinance 
-pandas 
-matplotlib 
+streamlit
+yfinance
+scipy
+matplotlib
 numpy
-seaborn
+pandas
+PyPortfolioOpt
