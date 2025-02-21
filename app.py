@@ -15,7 +15,7 @@ st.set_page_config(page_title="Black-Litterman Portfolio Optimizer", page_icon="
 
 # Title
 st.title("📊 Black-Litterman Portfolio Optimizer")
-st.write("Optimize your portfolio using the Black-Litterman model.")
+st.write("Optimize your portfolio using the Black-Litterman model with market views.")
 
 # Sidebar Inputs
 st.sidebar.header("⚙️ Model Inputs")
@@ -50,6 +50,7 @@ start_date_str, end_date_str = start_date.strftime('%Y-%m-%d'), end_date.strftim
 if st.sidebar.button("🔍 Optimize Portfolio"):
     try:
         # Fetch historical price data
+        st.sidebar.write("📥 Fetching Stock Data...")
         prices = yf.download(selected_assets, start=start_date_str, end=end_date_str)["Adj Close"]
 
         # Compute returns & covariance
@@ -73,8 +74,17 @@ if st.sidebar.button("🔍 Optimize Portfolio"):
         weights = ef.max_sharpe(risk_free_rate=risk_free_rate)
         cleaned_weights = ef.clean_weights()
 
-        # Display Results
-        st.subheader("📊 Optimal Portfolio Allocation")
+        # Compute portfolio performance metrics
+        expected_return, volatility, sharpe_ratio = ef.portfolio_performance(risk_free_rate=risk_free_rate)
+
+        # Display Portfolio Metrics
+        st.subheader("📊 Portfolio Performance Metrics")
+        st.write(f"📈 **Expected Annual Return**: {expected_return:.2%}")
+        st.write(f"📉 **Portfolio Volatility**: {volatility:.2%}")
+        st.write(f"⚖️ **Sharpe Ratio**: {sharpe_ratio:.2f}")
+
+        # Display Portfolio Allocation
+        st.subheader("📌 Optimal Portfolio Allocation")
         allocation_df = pd.DataFrame.from_dict(cleaned_weights, orient="index", columns=["Weight"])
         st.write(allocation_df)
 
@@ -87,5 +97,10 @@ if st.sidebar.button("🔍 Optimize Portfolio"):
         ax.tick_params(axis='x', rotation=45)
         st.pyplot(fig)
 
+        # Download Portfolio Weights
+        csv = allocation_df.to_csv(index=True).encode("utf-8")
+        st.download_button("📥 Download Portfolio Weights (CSV)", data=csv, file_name="portfolio_weights.csv", mime="text/csv")
+
     except Exception as e:
         st.error(f"🚨 Error computing Black-Litterman model: {str(e)}")
+
