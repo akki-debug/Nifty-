@@ -1,108 +1,91 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from datetime import datetime
-import numpy as np
+from pypfopt.black_litterman import BlackLittermanModel
+from pypfopt.efficient_frontier import EfficientFrontier
+from pypfopt.risk_models import CovarianceShrinkage
+from pypfopt.expected_returns import mean_historical_return
 
-# Page Config
-st.set_page_config(page_title="NIFTY 50 Stock Dashboard", page_icon="📈", layout="wide")
+# Page Configuration
+st.set_page_config(page_title="Black-Litterman Portfolio Optimizer", page_icon="📈", layout="wide")
 
-# Custom CSS for styling
-st.markdown("""
-    <style>
-        /* Custom styles for a cleaner look */
-        .stApp {
-            background-color: #f4f4f4;
-        }
-        .main-title {
-            text-align: center;
-            font-size: 2.5rem;
-            color: #1f77b4;
-            font-weight: bold;
-        }
-        .sub-title {
-            font-size: 1.5rem;
-            color: #ff5733;
-            font-weight: bold;
-        }
-        .stat-card {
-            background-color: white;
-            padding: 15px;
-            border-radius: 10px;
-            box-shadow: 2px 2px 10px rgba(0,0,0,0.1);
-        }
-    </style>
-""", unsafe_allow_html=True)
+# Title
+st.title("📊 Black-Litterman Portfolio Optimizer")
+st.write("Optimize your portfolio using the Black-Litterman model.")
 
-# Title and header
-st.markdown('<h1 class="main-title">📈 NIFTY 50 Stock Dashboard</h1>', unsafe_allow_html=True)
-st.markdown('<p class="sub-title">Real-time Stock Market Analysis</p>', unsafe_allow_html=True)
+# Sidebar Inputs
+st.sidebar.header("⚙️ Model Inputs")
 
-# Sidebar for selections
-st.sidebar.header("⚙️ Settings")
-
-# Stock Selection
+# NIFTY 50 Stock List
 nifty50_stocks = [
     "RELIANCE.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS", "TCS.NS",
     "HINDUNILVR.NS", "ITC.NS", "LT.NS", "AXISBANK.NS", "BHARTIARTL.NS"
 ]
-selected_stock = st.sidebar.selectbox("🔍 Select a Stock", nifty50_stocks)
 
-# Date Selection
+# Portfolio Stock Selection
+selected_assets = st.sidebar.multiselect("📌 Select Stocks for Portfolio", nifty50_stocks, nifty50_stocks[:5])
+
+# Market Expected Return & Risk-Free Rate
+market_return = st.sidebar.slider("📈 Expected Market Return (%)", 5, 20, 10) / 100
+risk_free_rate = st.sidebar.slider("🏦 Risk-Free Rate (%)", 2, 10, 5) / 100
+confidence = st.sidebar.slider("💡 Investor Confidence in Views (%)", 0, 100, 50) / 100
+
+# User Views on Expected Returns
+st.sidebar.subheader("🔮 Your Views on Returns (%)")
+user_views = {}
+for stock in selected_assets:
+    view = st.sidebar.number_input(f"{stock}", -10.0, 20.0, 5.0) / 100
+    user_views[stock] = view
+
+# Date Range
 start_date = st.sidebar.date_input("📅 Start Date", value=pd.to_datetime("2023-01-01"))
 end_date = st.sidebar.date_input("📅 End Date", value=pd.to_datetime("2023-12-31"))
-
-# Convert dates
 start_date_str, end_date_str = start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')
 
-# Fetch stock data
-try:
-    stock_data = yf.Ticker(selected_stock)
-    hist = stock_data.history(start=start_date_str, end=end_date_str)
+# Compute Black-Litterman Model
+if st.sidebar.button("🔍 Optimize Portfolio"):
+    try:
+        # Fetch historical price data
+        prices = yf.download(selected_assets, start=start_date_str, end=end_date_str)["Adj Close"]
 
-    # Display stock info
-    st.markdown(f"### 📊 Basic Information - {selected_stock}")
-    with st.expander("🔍 View Stock Details"):
-        st.write(stock_data.info)
+        # Compute returns & covariance
+        returns = prices.pct_change().dropna()
+        mu = mean_historical_return(prices)
+        S = CovarianceShrinkage(returns).ledoit_wolf()
 
-    # Price & Volume Charts
-    st.markdown("### 📈 Stock Performance")
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8))
+        # Market Caps (Approximated)
+        market_caps = {stock: prices[stock].iloc[-1] * 1e6 for stock in selected_assets}
 
-    # Price Chart
-    sns.lineplot(x=hist.index, y=hist["Close"], ax=ax1, color="blue", linewidth=2.5)
-    ax1.set_title("Stock Closing Price", fontsize=14)
-    ax1.set_xlabel("Date")
-    ax1.set_ylabel("Price (₹)")
-    ax1.grid(True)
+        # Convert user views into expected returns
+        Q = np.array([user_views[stock] for stock in selected_assets])
+        P = np.identity(len(selected_assets))
 
-    # Volume Chart
-    sns.barplot(x=hist.index, y=hist["Volume"], ax=ax2, color="orange", alpha=0.7)
-    ax2.set_title("Trading Volume", fontsize=14)
-    ax2.set_xlabel("Date")
-    ax2.set_ylabel("Volume")
-    ax2.grid(True)
+        # Black-Litterman Model
+        bl = BlackLittermanModel(S, pi=mu, market_caps=market_caps, absolute_views=Q, P=P, tau=confidence)
+        bl_mu = bl.bl_returns  # Adjusted expected returns
 
-    st.pyplot(fig)
+        # Optimize Portfolio
+        ef = EfficientFrontier(bl_mu, S)
+        weights = ef.max_sharpe(risk_free_rate=risk_free_rate)
+        cleaned_weights = ef.clean_weights()
 
-    # Stock Statistics
-    st.markdown("### 📌 Key Statistics")
-    stats = {
-        "📍 Current Price": round(hist["Close"][-1], 2),
-        "📊 Daily Return (%)": round(hist["Close"].pct_change().dropna().mean() * 100, 2),
-        "📉 Volatility (%)": round(hist["Close"].pct_change().dropna().std() * np.sqrt(252) * 100, 2),
-        "📈 52-Week High": round(hist["High"].max(), 2),
-        "📉 52-Week Low": round(hist["Low"].min(), 2),
-    }
+        # Display Results
+        st.subheader("📊 Optimal Portfolio Allocation")
+        allocation_df = pd.DataFrame.from_dict(cleaned_weights, orient="index", columns=["Weight"])
+        st.write(allocation_df)
 
-    # Display in columns
-    col1, col2, col3 = st.columns(3)
-    col4, col5 = st.columns(2)
+        # Plot Allocation
+        fig, ax = plt.subplots(figsize=(8, 4))
+        sns.barplot(x=allocation_df.index, y=allocation_df["Weight"], palette="coolwarm", ax=ax)
+        ax.set_title("Optimal Portfolio Allocation")
+        ax.set_ylabel("Weight")
+        ax.set_xlabel("Stock")
+        ax.tick_params(axis='x', rotation=45)
+        st.pyplot(fig)
 
-    for col, (stat, value) in zip([col1, col2, col3, col4, col5], stats.items()):
-        col.markdown(f'<div class="stat-card"><b>{stat}</b>: {value}</div>', unsafe_allow_html=True)
-
-except Exception as e:
-    st.error(f"🚨 Error fetching data: {str(e)}")
+    except Exception as e:
+        st.error(f"🚨 Error computing Black-Litterman model: {str(e)}")
