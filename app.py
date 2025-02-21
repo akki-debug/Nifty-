@@ -2,83 +2,107 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import matplotlib.pyplot as plt
-from datetime import datetime, timedelta
-import numpy as np  # Added missing numpy import
+import seaborn as sns
+from datetime import datetime
+import numpy as np
+
+# Page Config
+st.set_page_config(page_title="NIFTY 50 Stock Dashboard", page_icon="📈", layout="wide")
+
+# Custom CSS for styling
+st.markdown("""
+    <style>
+        /* Custom styles for a cleaner look */
+        .stApp {
+            background-color: #f4f4f4;
+        }
+        .main-title {
+            text-align: center;
+            font-size: 2.5rem;
+            color: #1f77b4;
+            font-weight: bold;
+        }
+        .sub-title {
+            font-size: 1.5rem;
+            color: #ff5733;
+            font-weight: bold;
+        }
+        .stat-card {
+            background-color: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 2px 2px 10px rgba(0,0,0,0.1);
+        }
+    </style>
+""", unsafe_allow_html=True)
 
 # Title and header
-st.title("NIFTY 50 Stock Dashboard")
-st.header("Real-time Stock Information")
+st.markdown('<h1 class="main-title">📈 NIFTY 50 Stock Dashboard</h1>', unsafe_allow_html=True)
+st.markdown('<p class="sub-title">Real-time Stock Market Analysis</p>', unsafe_allow_html=True)
 
-# Create a selectbox for stock selection
+# Sidebar for selections
+st.sidebar.header("⚙️ Settings")
+
+# Stock Selection
 nifty50_stocks = [
     "RELIANCE.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS", "TCS.NS",
-    "HINDUNILVR.NS", "ITC.NS", "LT.NS", "AXISBANK.NS", "BHARTIARTL.NS",
-    "SBIN.NS", "ASIANPAINT.NS", "NESTLEIND.NS", "WIPRO.NS", "BAJFINANCE.NS",
-    "M&M.NS", "SUNPHARMA.NS", "CIPLA.NS", "DRREDDY.NS", "DIVISLAB.NS",
-    "BRITANNIA.NS", "ULTRACEMCO.NS", "NTPC.NS", "POWERGRID.NS", "COALINDIA.NS",
-    "ONGC.NS", "IOC.NS", "BPCL.NS", "HINDPETRO.NS", "GAIL.NS",
-    "JSWSTEEL.NS", "TATASTEEL.NS", "HINDALCO.NS", "VEDL.NS", "TATAMOTORS.NS",
-    "MARUTI.NS", "EICHERMOT.NS", "HEROMOTOCO.NS", "BOSCHLTD.NS", "MRF.NS",
-    "NATIONALUM.NS", "ADANIPORTS.NS", "APOLLOHOSP.NS", "AARTIIND.NS", "ABB.NS",
-    "ABBOTINDIA.NS", "3MINDIA.NS", "AIAENG.NS", "APLLTD.NS", "BALKRISIND.NS",
-    "BANDHANBNK.NS", "BATAINDIA.NS", "BERGEPAINT.NS", "BHARATFORG.NS"
+    "HINDUNILVR.NS", "ITC.NS", "LT.NS", "AXISBANK.NS", "BHARTIARTL.NS"
 ]
+selected_stock = st.sidebar.selectbox("🔍 Select a Stock", nifty50_stocks)
 
-# Create stock selector
-selected_stock = st.selectbox("Select Stock", nifty50_stocks)
+# Date Selection
+start_date = st.sidebar.date_input("📅 Start Date", value=pd.to_datetime("2023-01-01"))
+end_date = st.sidebar.date_input("📅 End Date", value=pd.to_datetime("2023-12-31"))
 
-# Date range selector
-st.subheader("Date Range")
-col1, col2 = st.columns(2)
-start_date = col1.date_input("Start Date", value=pd.to_datetime("2023-01-01"))
-end_date = col2.date_input("End Date", value=pd.to_datetime("2023-12-31"))
+# Convert dates
+start_date_str, end_date_str = start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')
 
-# Convert dates to strings for yfinance
-start_date_str = start_date.strftime('%Y-%m-%d')
-end_date_str = end_date.strftime('%Y-%m-%d')
-
-# Fetch data
+# Fetch stock data
 try:
     stock_data = yf.Ticker(selected_stock)
     hist = stock_data.history(start=start_date_str, end=end_date_str)
-    
-    # Display basic information
-    st.subheader(f"Basic Information - {selected_stock}")
-    info = stock_data.info
-    st.write(info)
-    
-    # Display charts
-    st.subheader("Price Charts")
+
+    # Display stock info
+    st.markdown(f"### 📊 Basic Information - {selected_stock}")
+    with st.expander("🔍 View Stock Details"):
+        st.write(stock_data.info)
+
+    # Price & Volume Charts
+    st.markdown("### 📈 Stock Performance")
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8))
-    
-    # Price chart
-    ax1.plot(hist.index, hist['Close'], label='Close Price')
-    ax1.set_title('Stock Price')
-    ax1.set_xlabel('Date')
-    ax1.set_ylabel('Price (₹)')
-    ax1.legend()
+
+    # Price Chart
+    sns.lineplot(x=hist.index, y=hist["Close"], ax=ax1, color="blue", linewidth=2.5)
+    ax1.set_title("Stock Closing Price", fontsize=14)
+    ax1.set_xlabel("Date")
+    ax1.set_ylabel("Price (₹)")
     ax1.grid(True)
-    
-    # Volume chart
-    ax2.bar(hist.index, hist['Volume'], label='Volume')
-    ax2.set_title('Trading Volume')
-    ax2.set_xlabel('Date')
-    ax2.set_ylabel('Volume')
-    ax2.legend()
+
+    # Volume Chart
+    sns.barplot(x=hist.index, y=hist["Volume"], ax=ax2, color="orange", alpha=0.7)
+    ax2.set_title("Trading Volume", fontsize=14)
+    ax2.set_xlabel("Date")
+    ax2.set_ylabel("Volume")
     ax2.grid(True)
-    
+
     st.pyplot(fig)
-    
-    # Display statistics
-    st.subheader("Key Statistics")
+
+    # Stock Statistics
+    st.markdown("### 📌 Key Statistics")
     stats = {
-        'Current Price': hist['Close'][-1],
-        'Daily Return': hist['Close'].pct_change().dropna().mean() * 100,
-        'Volatility': hist['Close'].pct_change().dropna().std() * np.sqrt(252) * 100,
-        '52-Week High': hist['High'].max(),
-        '52-Week Low': hist['Low'].min()
+        "📍 Current Price": round(hist["Close"][-1], 2),
+        "📊 Daily Return (%)": round(hist["Close"].pct_change().dropna().mean() * 100, 2),
+        "📉 Volatility (%)": round(hist["Close"].pct_change().dropna().std() * np.sqrt(252) * 100, 2),
+        "📈 52-Week High": round(hist["High"].max(), 2),
+        "📉 52-Week Low": round(hist["Low"].min(), 2),
     }
-    st.write(pd.DataFrame.from_dict(stats, orient='index', columns=['Value']))
-    
+
+    # Display in columns
+    col1, col2, col3 = st.columns(3)
+    col4, col5 = st.columns(2)
+
+    for col, (stat, value) in zip([col1, col2, col3, col4, col5], stats.items()):
+        col.markdown(f'<div class="stat-card"><b>{stat}</b>: {value}</div>', unsafe_allow_html=True)
+
 except Exception as e:
-    st.error(f"Error fetching data: {str(e)}")
+    st.error(f"🚨 Error fetching data: {str(e)}")
