@@ -1,1 +1,1 @@
-https://up2-icfar2cfq9dwcuuejmhjxe.streamlit.app/
+https://bfb6fy7jujvwcwz4cqcx5d.streamlit.app/
