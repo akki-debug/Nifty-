@@ -3,6 +3,7 @@ import yfinance as yf
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
+import numpy as np  # Added missing numpy import
 
 # Title and header
 st.title("NIFTY 50 Stock Dashboard")
@@ -26,7 +27,7 @@ nifty50_stocks = [
 # Create stock selector
 selected_stock = st.selectbox("Select Stock", nifty50_stocks)
 
-# Date range selector - Using separate date inputs instead of slider
+# Date range selector
 st.subheader("Date Range")
 col1, col2 = st.columns(2)
 start_date = col1.date_input("Start Date", value=pd.to_datetime("2023-01-01"))
